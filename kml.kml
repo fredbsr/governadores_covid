@@ -1,0 +1,13 @@
+<?xml version="1.0"?>
+<kml xmlns="http://earth.google.com/kml/2.0">
+  <Document>    <ScreenOverlay>
+      <name>Legenda</name>
+      <Icon>
+        <href>http://i3geo.saude.gov.br/ms_tmp/5ee42cc3_7a40_0.png</href>
+      </Icon>
+      <overlayXY x="0.01" y="0.14" xunits="fraction" yunits="fraction"/>
+      <screenXY x="0.01" y="0.14" xunits="fraction" yunits="fraction"/>
+      <size x="-1" y="-1" xunits="pixels" yunits="pixels"/>
+    </ScreenOverlay>
+<GroundOverlay><name>Limites das regi&#xF5;es de sa&#xFA;de</name><Icon><href>http://i3geo.saude.gov.br:80/i3geo/ogc.php?tema=limites_regiao_saude&amp;width=1500&amp;height=1500&amp;TRANSPARENT=true&amp;FORMAT=image/png&amp;VERSION=1.1.1&amp;REQUEST=GetMap&amp;SRS=EPSG:4618&amp;STYLES=&amp;FORMAT=image/png&amp;TRANSPARENT=TRUE&amp;layers=limites_regiao_saude</href><viewRefreshMode>onStop</viewRefreshMode></Icon><LatLonBox><north>9.4921895527734</north><south>-39.394608552863</south><east>-29.5851853</east><west>-76.5125927</west></LatLonBox></GroundOverlay></Document>
+</kml>
