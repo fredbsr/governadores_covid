@@ -5,22 +5,15 @@ library(ribge)
 library(coronabr)
 library(googlesheets4)
 library(tidyverse)
-<<<<<<< HEAD
-=======
 library(magrittr)
->>>>>>> 4386ef3b44920ae8e0d81adefb323c5ddd3b60e5
 library(geobr)
 library(rvest)
 library(sf)
 library(textclean)
-<<<<<<< HEAD
-
-# Regiões e estadosbrasil
-=======
 library(data.table)
 
+
 # Regiões e estadosbrasil ----
->>>>>>> 4386ef3b44920ae8e0d81adefb323c5ddd3b60e5
 estados <- read_state()
 # Codificação das regiões
 cods_ibge <- estados %>% 
@@ -36,11 +29,8 @@ pop %<>%
 
 # SRAG ----
 raw = "https://gitlab.procc.fiocruz.br/mave/repo/-/raw/master/Dados/InfoGripe/dados_semanais_faixa_etaria_sexo_virus_sem_filtro_sintomas.csv"
-<<<<<<< HEAD
-
-=======
 #raw = "https://gitlab.procc.fiocruz.br/mave/repo/-/raw/master/Dados/InfoGripe/serie_temporal_com_estimativas_recentes_sem_filtro_sintomas.csv"
->>>>>>> 4386ef3b44920ae8e0d81adefb323c5ddd3b60e5
+
 SRAG_raw <- read_csv2(raw) %>% 
   janitor::clean_names() 
 
@@ -50,12 +40,8 @@ SRAG <- SRAG_raw %>%
   dplyr::filter(tipo=="Estado",escala=="casos",sexo=="Total",#semana_epidemiologica<22,
                 dado%in%c("srag","sragcovid")) %>%
   group_by(codigo_uf=uf,unidade_da_federacao,semana_epidemiologica,ano_epidemiologico,dado) %>%
-<<<<<<< HEAD
-  summarise(casos=sum(total_reportado_ate_a_ultima_atualizacao,na.rm = T)) %>%
-=======
   summarise(casos=sum(casos_semanais_reportados_ate_a_ultima_atualizacao,#total_reportado_ate_a_ultima_atualizacao,## mudou o nome da variavel
                       na.rm = T)) %>%
->>>>>>> 4386ef3b44920ae8e0d81adefb323c5ddd3b60e5
   ungroup() %>%
   mutate(ano_2020 = (ano_epidemiologico>2019)) %>%
   group_by(codigo_uf,unidade_da_federacao,semana_epidemiologica,ano_2020,dado) %>%
@@ -86,7 +72,7 @@ SRAG <- SRAG_raw %>%
          ) %>%
   left_join(cods_ibge)
 
-<<<<<<< HEAD
+
 rm(cods_ibge,pop,estados,SRAG_raw,raw)
 # write_excel_csv2(SRAG,"dados_srag_2020_uf.csv")
 
@@ -95,7 +81,7 @@ SRAG %>%
   ggplot(aes(x=Semana)) +
   geom_area(aes(y=srag_excesso_100k,fill="SRAG excedente"),alpha=.5) +
   geom_area(aes(y=covid_100k,fill="COVID-19")) +
-=======
+
 #rm(cods_ibge,pop,estados,SRAG_raw,raw)
 # write_excel_csv2(SRAG,"dados_srag_2020_uf.csv")
 
@@ -121,7 +107,7 @@ SRAG %>%
                      labels = c("07.mar","11.abr",
                                 "16.mai","20.jun"),
                      limits = c(10,28)) +
->>>>>>> 4386ef3b44920ae8e0d81adefb323c5ddd3b60e5
+
   facet_wrap(vars(UF)) +
   labs(fill="",y="Casos por 100k hab") +
   hrbrthemes::theme_ipsum() +
@@ -129,10 +115,8 @@ SRAG %>%
         panel.spacing=grid::unit(.25, "lines"),
         plot.margin = ggplot2::margin(2, 2, 2, 2))
 
-<<<<<<< HEAD
-=======
 
->>>>>>> 4386ef3b44920ae8e0d81adefb323c5ddd3b60e5
+
 # Brasil
 SRAG %>%
   group_by(Semana) %>%
@@ -156,8 +140,6 @@ SRAG %>%
         plot.margin = ggplot2::margin(2, 2, 2, 2))  
   
 
-<<<<<<< HEAD
-=======
 # COVID Brasil.io ----
 br.io <- fread("https://data.brasil.io/dataset/covid19/caso_full.csv.gz") %>% 
   dplyr::filter(place_type=="state")
@@ -182,7 +164,7 @@ br.io %<>% group_by(UF=state,Semana=epidemiological_week) %>%
 
 rc.obito <- fread("https://data.brasil.io/dataset/covid19/obito_cartorio.csv.gz")
 
->>>>>>> 4386ef3b44920ae8e0d81adefb323c5ddd3b60e5
+
 # Governadores ----
 gov_url <- "https://pt.wikipedia.org/wiki/Lista_de_governadores_das_unidades_federativas_do_Brasil_(2019%E2%80%932023)"
 govs <- gov_url %>%
@@ -240,22 +222,17 @@ govs <- gov_url %>%
 
 
 
-<<<<<<< HEAD
-# Dados de testagem
-=======
 # Dados de testagem ----
->>>>>>> 4386ef3b44920ae8e0d81adefb323c5ddd3b60e5
+
 testes_url_18_06 <-'http://web.archive.org/web/20200618071354/https://g1.globo.com/bemestar/coronavirus/noticia/2020/06/10/veja-taxa-de-ocupacao-nas-utis-testes-feitos-e-pacientes-recuperados-da-covid-19-em-cada-estado-do-brasil.ghtml'
 
 testes_url <- "https://g1.globo.com/bemestar/coronavirus/noticia/2020/06/10/veja-taxa-de-ocupacao-nas-utis-testes-feitos-e-pacientes-recuperados-da-covid-19-em-cada-estado-do-brasil.ghtml"
 
-<<<<<<< HEAD
 testes <- testes_url_18_06 %>%
   read_html() %>%
   html_nodes('table') #%>% html_node(xpath = path_url) 
 
 testagem <- testes[[4]] %>%
-=======
 testes <- 
 #  testes_url_18_06 %>%
   testes_url %>%
@@ -263,41 +240,29 @@ testes <-
   html_nodes('table') #%>% html_node(xpath = path_url) 
 
 testagem <- testes[[1]] %>%
->>>>>>> 4386ef3b44920ae8e0d81adefb323c5ddd3b60e5
   html_table(header=T) %>%
   janitor::clean_names() %>%
   rename(testes = nº_de_testes,
          Estado = estado) %>%
-<<<<<<< HEAD
-  mutate(testes=as.numeric(gsub("\\.","",testes))) %>% 
-=======
   mutate(testes=gsub("\\(.*\\)","", testes),
          testes=gsub("[^0-9,-]", "", testes),
          testes=gsub(" ", "", testes),
          testes=as.numeric(testes)) %>% 
 #  mutate(testes=as.numeric(gsub("\\.","",testes))) %>% 
->>>>>>> 4386ef3b44920ae8e0d81adefb323c5ddd3b60e5
   dplyr::filter(Estado != "Total") 
 
 
 testagem %>% left_join(SRAG) %>%
-<<<<<<< HEAD
+
   mutate(tx_teste = testes*10^5/populacao) %>%
   ggplot(aes(fill=Regiao,y=reorder(UF,desc(-tx_teste)),x=tx_teste)) +
   geom_bar(stat = "identity") +
   labs(x="Testes por 100k habitantes",y="UF",fill="") +
-=======
-  mutate(tx_teste = testes*10^4/populacao) %>%
-  ggplot(aes(fill=Regiao,y=reorder(UF,desc(-tx_teste)),x=tx_teste)) +
-  geom_bar(stat = "identity") +
-  labs(x="Testes por 10mil habitantes",y="UF",fill="") +
->>>>>>> 4386ef3b44920ae8e0d81adefb323c5ddd3b60e5
   theme_minimal() +
  # facet_grid(.~orientacao,space="free",scales = "free") +
   theme(legend.position = "bottom")
 
-<<<<<<< HEAD
-=======
+
 # Outro dado de testagem
 testagem2 <- read_csv("testes.csv") %>%
   dplyr::select(UF,testes=Testes)
@@ -314,23 +279,12 @@ testagem2 %>% left_join(SRAG) %>%
 
 
 
->>>>>>> 4386ef3b44920ae8e0d81adefb323c5ddd3b60e5
 # Normas relacionadas à Saúde ----
 normas_plan <- "https://docs.google.com/spreadsheets/d/1uZuSbqxywEwJiF4uBnc4yofIE9EH8oFG2maqhVfOrWk/edit#gid=1846588799"
 # normas <- googlesheets4::read_sheet(normas_plan,sheet = 3,range = "B2:AC985",
 #                                 col_types = "cDcccccccccccccccccccccccccc") 
 
-<<<<<<< HEAD
-normas_data <- googlesheets4::read_sheet(normas_plan,sheet = 3,range = "B2:C985",
-                                    col_types = "cD") %>%
-  rename(UF=Estado)
 
-normas <- 
-  expand_grid(UF=levels(factor(normas_data$UF)),
-              Semana = 1:26) %>% full_join(
-  normas_data %>%
-  mutate(Semana = lubridate::epiweek(Data)) %>%
-=======
 normas_data <- googlesheets4::read_sheet(normas_plan,sheet = 3,range = "A1:AD1824",
                   col_types = "cDDccccccccccccccccccccccccccc") %>%
   janitor::clean_names() %>%
@@ -343,7 +297,7 @@ normas <-
               Semana = 1:30) %>% full_join(
   normas_data %>%
   mutate(Semana = lubridate::epiweek(data)) %>%
->>>>>>> 4386ef3b44920ae8e0d81adefb323c5ddd3b60e5
+
   group_by(Semana,UF) %>%
   summarise(Normas=n()) 
               ) %>%
@@ -351,7 +305,7 @@ normas <-
   group_by(UF) %>%
   mutate(Normas_acum=cumsum(Normas))
 
-<<<<<<< HEAD
+
 # Normas por estado gráfico
 normas %>%
   dplyr::filter(Semana<22) %>%
@@ -359,7 +313,6 @@ normas %>%
   ggplot(aes(x=Semana,fill=UF)) +
   geom_bar(aes(y=Normas),stat = "identity",color=NA) +
  # geom_
-=======
 
 # Normas por estado gráfico
 normas %>%
@@ -369,13 +322,13 @@ normas %>%
   geom_bar(aes(y=Normas),stat = "identity",color=NA) +
   geom_line(aes(y=Normas_acum)) +
   # geom_
->>>>>>> 4386ef3b44920ae8e0d81adefb323c5ddd3b60e5
+
   facet_wrap(vars(UF)) +
   theme_minimal() +
   theme(legend.position = "none")
 
-<<<<<<< HEAD
-=======
+#<<<<<<< HEAD
+
 normas_tema <-  normas_data %>%
   mutate(UF=UF,
             data=data,
@@ -678,7 +631,6 @@ ggsave(file='g5.png',plot=g[[5]],width = 10,height = 6)
 ggsave(file='g6.png',plot=g[[6]],width = 10,height = 6)
 
 
->>>>>>> 4386ef3b44920ae8e0d81adefb323c5ddd3b60e5
 ## BASE COMPLETA ####
 
 df <- SRAG %>%
@@ -809,8 +761,6 @@ write_excel_csv2(df,"dados_srag_covid_uf.csv")
 receitas_DF_jun2019 %<>% mutate(ano=2019)
 
 write_excel_csv2(receitas_DF,"receitas_DF_atejun.csv")
-<<<<<<< HEAD
-=======
 
 ## Dados infectados DF ----
 library(readr)
@@ -974,6 +924,3 @@ obitos_vs_pop %>%
         panel.spacing=grid::unit(.25, "lines"),
         plot.margin = ggplot2::margin(2, 2, 2, 2))
 
-
-  
->>>>>>> 4386ef3b44920ae8e0d81adefb323c5ddd3b60e5

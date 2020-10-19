@@ -5,41 +5,33 @@ library(readxl)
 library(scales)
 library(patchwork)
 library(ggrepel)
+library(textclean)
 
-<<<<<<< HEAD
-IGP <- read_excel("igp.xlsx",sheet = 2)
-
-transf_SIGA <- read_excel("siga_brasil.xlsx",sheet = 1)
-
-=======
 #Inflacao ----
 IGP <- read_excel("igp.xlsx",sheet = 2)
 
 # SIGA ----
 transf_SIGA <- read_excel("siga_brasil.xlsx",sheet = 1)
 
-# Dados mobilidade ----
->>>>>>> 4386ef3b44920ae8e0d81adefb323c5ddd3b60e5
-mobilidade_dia <- read_delim("Global_Mobility_Report.csv",
+# Dados mobilidade Google ----
+
+# url com csv do GoogleMobilityReport
+url_gmr <- "https://www.gstatic.com/covid19/mobility/Global_Mobility_Report.csv"
+
+# leitura dos dados usando read_delim
+mobilidade_dia <- read_delim(url_gmr,
                                 ",", escape_double = FALSE, skip = 0,
                                 locale = locale(decimal_mark = ".",
                                                 grouping_mark = ","), trim_ws = TRUE) %>%
+  # limpando nomes das variaveis
   janitor::clean_names() %>%
-<<<<<<< HEAD
-  dplyr::filter(iso_3166_2_code=="BR-DF") %>%
-  mutate(Semana = lubridate::epiweek(date)) 
-
-mobilidade <- mobilidade_dia %>%
-  group_by(Semana) %>%
-  summarise_if(is.numeric,mean,na.rm=T)
-
-
-=======
-#  dplyr::filter(iso_3166_2_code=="BR-DF") %>%
+  # filtrando apenas Brasil
   dplyr::filter(country_region=="Brazil") %>%
+  #criando variavel com a semana epidemiologica
   mutate(Semana = lubridate::epiweek(date)) 
 
 mobilidade <- mobilidade_dia %>%
+  # traduzindo 
   mutate(UF=case_when(is.na(sub_region_1) ~ " Brasil",
                       sub_region_1=="Federal District"~"DF",
                       sub_region_1=="State of Acre"   ~"AC",
@@ -70,6 +62,7 @@ mobilidade <- mobilidade_dia %>%
                       sub_region_1=="State of Tocantins"~"TO"
                       )
   ) %>%
+  # calculando media das atividades por coluna numerica
   group_by(UF,Semana) %>%
   summarise_if(is.numeric,mean,na.rm=T)
 
@@ -79,6 +72,7 @@ mobilidade <- mobilidade_dia %>%
 #   pivot_longer(3:8) %>%
 #   mutate(name=gsub("_percent_change_from_baseline","",name))
 
+# traducao das atividades
 mob_plot <- mobilidade %>%
   pivot_longer(3:8) %>%
   mutate(name=gsub("_percent_change_from_baseline","",name)) %>%
@@ -118,6 +112,8 @@ mob_plot %>%
        x="",
        caption = "Fonte: Google Mobility Report, 2020") +
   facet_wrap(vars(UF),ncol=7) + theme_minimal() + theme(legend.position = "top")
+
+
 hrbrthemes::theme_ipsum() +
   theme(panel.spacing=grid::unit(.25, "lines"),
         plot.margin = ggplot2::margin(2, 2, 2, 2))
@@ -179,7 +175,7 @@ mob_plot %>%
         plot.margin = ggplot2::margin(2, 2, 2, 2))
 
 
-write_rds(mob_plot,"mob_plot.rds")
+# write_rds(mob_plot,"mob_plot.rds")
 
 
 # Relatorio receita SEFAZ DF ----
@@ -387,49 +383,6 @@ SRAG %>%
 
 fig.covid/fig.receitas +plot_layout(heights = c(5,4))
 
-<<<<<<< HEAD
-mob_plot <- mobilidade_dia %>%
-  dplyr::select(-c(1:4,6,14)) %>%
-  pivot_longer(3:8) %>%
-  mutate(name=gsub("_percent_change_from_baseline","",name))
-
-mob_plot <- mobilidade %>%
-  pivot_longer(2:7) %>%
-  mutate(name=gsub("_percent_change_from_baseline","",name)) %>%
-  mutate(nome=mgsub(name,
-                    c("grocery_and_pharmacy",
-                      "parks",
-                      "residential",
-                      "retail_and_recreation",
-                      "transit_stations",
-                      "workplaces"),
-                    c("Lanchonetes e farmácias",
-                      "Parques",
-                      "Residências",
-                      "Varejo e recreação",
-                      "Estações de transporte",
-                      "Locais de trabalho")))
-
-
-mob_plot %>%
-  ggplot() +
-  geom_line(aes(group=nome,color=nome,x=Semana,y=value),size=2) +
-  scale_x_continuous(breaks = c(3,7.5,11.5,15.5,19.5,23.5),
-                     labels = c("Jan","Fev","Mar","Abr","Mai","Jun")) +
-  geom_vline(xintercept = 13) +
-  annotate(geom = "label",label=" Pronunciamento do Presidente: 24.mar",x=13,y=35,hjust=0,vjust=.5,size=3) +
-  labs(y="Variação % em relação ao normal",color="Atividade",
-       title="Isolamento Social e mobilidade no DF",
-       x="",
-       caption = "Fonte: Google Mobility Report, 2020") +
-  hrbrthemes::theme_ipsum() +
-  theme(panel.spacing=grid::unit(.25, "lines"),
-        plot.margin = ggplot2::margin(2, 2, 2, 2))
-
-write_rds(mob_plot,"mob_plot.rds")
-=======
-
-
 
 # dados impostos nacional ----
 ICMS_br <- read_excel("Arrecadação ICMS por estado.xlsx")%>% 
@@ -593,4 +546,4 @@ ICMS_br_resumo <- ICMS_br_wide %>%
        #title="Evolução das receitas tributárias (ICMS 2020) - Fev-Jun e avanço da COVID-19",
        caption = "Fonte (receitas): CONFAZ, 2020\nFonte (COVID-19): FioCruz, 2020\nObs.:valores em R$ de jul/2020") +
   facet_wrap(vars(legenda),ncol=7) + theme_minimal()+ theme(legend.position = "none") #+
->>>>>>> 4386ef3b44920ae8e0d81adefb323c5ddd3b60e5
+
