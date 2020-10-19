@@ -114,6 +114,10 @@ SRAG_join <- SRAG %>%
          acumulado_ex = cumsum(excedente))
 
 
+<<<<<<< HEAD
+=======
+
+>>>>>>> 4386ef3b44920ae8e0d81adefb323c5ddd3b60e5
 SRAG_join %>%
   ggplot(aes(x=Semana,
              y=acumulado_ex*100000/populacao_datasus,color=UF,
@@ -160,8 +164,13 @@ testagem <- testes[[1]] %>%
          Estado = estado) %>%
   mutate(testes=as.numeric(gsub("\\.","",testes))) %>% 
   dplyr::filter(Estado != "Total") 
+<<<<<<< HEAD
 
 
+=======
+
+
+>>>>>>> 4386ef3b44920ae8e0d81adefb323c5ddd3b60e5
 testagem %>% left_join(govs) %>%
   mutate(tx_teste = testes*10^6/populacao) %>%
   ggplot(aes(fill=Regiao,x=reorder(UF,desc(-tx_teste)),y=tx_teste)) +
