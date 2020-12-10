@@ -88,14 +88,15 @@ SRAG_esp_join <- SRAG_esp %>%
 serie <- "https://gitlab.procc.fiocruz.br/mave/repo/-/raw/master/Dados/InfoGripe/serie_temporal_com_estimativas_recentes_sem_filtro_febre.csv"
 SRAG <- read_csv2(serie) %>% 
   janitor::clean_names() %>%
-  rename(reportado=total_reportado_ate_a_ultima_atualizacao)
+  rename(reportado=casos_semanais_reportados_ate_a_ultima_atualizacao)
 
 SRAG_join <- SRAG %>% 
   dplyr::filter(tipo=="Estado",
                 dado=="srag",
                 escala == "casos",
-                ano_epidemiologico %in% c("2020"),
-                semana_epidemiologica<22) %>% 
+                ano_epidemiologico %in% c("2020")#,
+                #semana_epidemiologica<22
+                ) %>% 
   mutate(code_region=as.numeric(str_sub(uf,1,1))) %>%
   left_join(regioes_cod) %>%
   transmute(Regiao=name_region,
@@ -135,17 +136,18 @@ covid <- get_corona_br(by_uf = TRUE) %>%
 covid_semana <- covid %>%
   mutate(Semana = lubridate::epiweek(date)) %>%
   group_by(UF,UF_codigo,Semana) %>%
-  summarise(Casos=mean(confirmed,na.rm=T),
-            Casos_100k = mean(confirmed_per_100k_inhabitants,na.rm=T),
-            Mortes=mean(deaths,na.rm=T)) %>% # left_join(SRAG_join) %>%
-            dplyr::filter(Semana<22)
+  summarise(Casos=mean(new_confirmed,na.rm=T),
+            estimated_population=mean(estimated_population,na.rm=T),
+            Mortes=mean(new_deaths,na.rm=T)) %>% # left_join(SRAG_join) %>%
+  mutate(Casos_100k = Casos*100000/estimated_population)         
+  # dplyr::filter(Semana<22)
 # Gráfico
 covid_semana %>% 
   left_join(govs) %>%
   ggplot(aes(x=Semana,group,color=UF,y=Casos_100k)) +
   geom_line() +
   # geom_
-  facet_grid(Regiao~orientacao) +
+  facet_grid(Regiao~.) +
   theme_minimal() +
   theme(legend.position = "none")
 
