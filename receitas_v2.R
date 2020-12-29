@@ -1,4 +1,3 @@
-# Pacotes
 library(readr)
 library(magrittr)
 library(tidyverse)
@@ -6,36 +5,24 @@ library(readxl)
 library(scales)
 library(patchwork)
 library(ggrepel)
-library(textclean)
 
 #Inflacao ----
 IGP <- read_excel("igp.xlsx",sheet = 2)
 
 # SIGA ----
-# Transfrencias fered. ()
 transf_SIGA <- read_excel("siga_brasil.xlsx",sheet = 1)
 
-# Dados mobilidade Google ----
-
-# url com csv do Google Mobility Report
-url_gmr <- "https://www.gstatic.com/covid19/mobility/Global_Mobility_Report.csv"
-
-# leitura dos dados usando read_delim
-mobilidade_dia <- 
-  read_delim(
-    url_gmr,
-    ",", escape_double = FALSE, skip = 0,
-    locale = locale(decimal_mark = ".",
-    grouping_mark = ","), trim_ws = TRUE) %>%
-  # limpando nomes das variaveis
+# Dados mobilidade ----
+mobilidade_dia <- read_delim("Global_Mobility_Report.csv",
+                                ",", escape_double = FALSE, skip = 0,
+                                locale = locale(decimal_mark = ".",
+                                                grouping_mark = ","), trim_ws = TRUE) %>%
   janitor::clean_names() %>%
-  # filtrando apenas Brasil
+#  dplyr::filter(iso_3166_2_code=="BR-DF") %>%
   dplyr::filter(country_region=="Brazil") %>%
-  #criando variavel com a semana epidemiologica
   mutate(Semana = lubridate::epiweek(date)) 
 
 mobilidade <- mobilidade_dia %>%
-  # traduzindo estados e adequando a UF
   mutate(UF=case_when(is.na(sub_region_1) ~ " Brasil",
                       sub_region_1=="Federal District"~"DF",
                       sub_region_1=="State of Acre"   ~"AC",
@@ -66,7 +53,6 @@ mobilidade <- mobilidade_dia %>%
                       sub_region_1=="State of Tocantins"~"TO"
                       )
   ) %>%
-  # calculando media das atividades por coluna numerica
   group_by(UF,Semana) %>%
   summarise_if(is.numeric,mean,na.rm=T)
 
@@ -76,13 +62,9 @@ mobilidade <- mobilidade_dia %>%
 #   pivot_longer(3:8) %>%
 #   mutate(name=gsub("_percent_change_from_baseline","",name))
 
-# df para grafico
 mob_plot <- mobilidade %>%
-  # colocando atividades em uma coluna
   pivot_longer(3:8) %>%
-  # retirando fragmento inutil do texto
   mutate(name=gsub("_percent_change_from_baseline","",name)) %>%
-  # traducao das atividades
   mutate(nome=mgsub(name,
                     c("grocery_and_pharmacy",
                       "parks",
@@ -97,9 +79,8 @@ mob_plot <- mobilidade %>%
                       "Estações de transporte",
                       "Locais de trabalho")))
 
-# Grafico mobilidade por estado
+
 mob_plot %>%
-  dplyr::filter(!(UF %in% c(" Brasil","AC"))) %>%
   ggplot() +
   geom_line(aes(group=nome,color=nome,x=Semana,y=value),size=.75) +
   scale_x_continuous(breaks = c(3,#7.5,
@@ -120,13 +101,11 @@ mob_plot %>%
        x="",
        caption = "Fonte: Google Mobility Report, 2020") +
   facet_wrap(vars(UF),ncol=7) + theme_minimal() + theme(legend.position = "top")
+hrbrthemes::theme_ipsum() +
+  theme(panel.spacing=grid::unit(.25, "lines"),
+        plot.margin = ggplot2::margin(2, 2, 2, 2))
 
-# tema
-# hrbrthemes::theme_ipsum() +
-#   theme(panel.spacing=grid::unit(.25, "lines"),
-#         plot.margin = ggplot2::margin(2, 2, 2, 2))
-
-# Grafico Mobilidade Brasil
+# Mobilidade Brasil
 mob_plot %>%
   dplyr::filter(UF==" Brasil",
               nome  %in% c("Lanchonetes e farmácias",
@@ -183,11 +162,10 @@ mob_plot %>%
         plot.margin = ggplot2::margin(2, 2, 2, 2))
 
 
-# write_rds(mob_plot,"mob_plot.rds")
+write_rds(mob_plot,"mob_plot.rds")
 
 
 # Relatorio receita SEFAZ DF ----
->>>>>>> 4386ef3b44920ae8e0d81adefb323c5ddd3b60e5
 relatorio_receita <- read_delim("relatorio_df_jan2019_jun2020.csv",
                                   ";", escape_double = FALSE, skip = 1,
                                   locale = locale(decimal_mark = ",",
@@ -392,6 +370,8 @@ SRAG %>%
 fig.covid/fig.receitas +plot_layout(heights = c(5,4))
 
 
+
+
 # dados impostos nacional ----
 ICMS_br <- read_excel("Arrecadação ICMS por estado.xlsx")%>% 
   pivot_longer(-1,values_to = "receita_realizada") %>%
@@ -554,4 +534,3 @@ ICMS_br_resumo <- ICMS_br_wide %>%
        #title="Evolução das receitas tributárias (ICMS 2020) - Fev-Jun e avanço da COVID-19",
        caption = "Fonte (receitas): CONFAZ, 2020\nFonte (COVID-19): FioCruz, 2020\nObs.:valores em R$ de jul/2020") +
   facet_wrap(vars(legenda),ncol=7) + theme_minimal()+ theme(legend.position = "none") #+
-
