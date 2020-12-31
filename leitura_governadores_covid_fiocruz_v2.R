@@ -35,6 +35,7 @@ SRAG_raw <- read_csv2(raw) %>%
   janitor::clean_names() 
 
 # write_rds(SRAG_raw,"SRAG_raw.rds")
+# SRAG_raw <- read_rds("SRAG_raw.rds")
 
 SRAG <- SRAG_raw %>% 
   dplyr::filter(tipo=="Estado",escala=="casos",sexo=="Total",#semana_epidemiologica<22,
@@ -118,17 +119,18 @@ SRAG %>%
   mutate(covid_100k=covid*10^5/populacao,
          srag_excesso_100k = srag_excesso*10^5/populacao
   ) %>%
-  dplyr::filter(Semana<24) %>%
+#  dplyr::filter(Semana<24) %>%
   ggplot(aes(x=Semana)) +
   geom_area(aes(y=srag_excesso,fill="SRAG excedente"),alpha=.5) +
   geom_area(aes(y=covid,fill="COVID-19")) +
-  scale_x_continuous(breaks = c(3,7.5,11.5,15.5,19.5,23.5),
-                     labels = c("Jan","Fev","Mar","Abr","Mai","Jun")) +
+  scale_x_continuous(limits = c(7,47),
+                     breaks = c(3,7.5,11.5,15.5,19.5,23.5,27.5,31.5,35.5,39.5,43.5,47.5),
+                     labels = c("Jan","Fev","Mar","Abr","Mai","Jun","Jul","Ago","Set","Out","Nov","Dez")) +
   labs(fill="",y="Casos novos",x="") +
   hrbrthemes::theme_ipsum() +
   theme(legend.position = "top",
-        panel.spacing=grid::unit(.25, "lines"),
-        plot.margin = ggplot2::margin(2, 2, 2, 2))  
+        panel.spacing=grid::unit(.15, "lines"),
+        plot.margin = ggplot2::margin(1, 1, 1, 1))  
   
 
 # COVID Brasil.io ----
@@ -276,7 +278,7 @@ normas_data <- googlesheets4::read_sheet(normas_plan,sheet = 3,range = "A1:AD283
 
 normas <- 
   expand_grid(UF=levels(factor(normas_data$UF)),
-              Semana = 1:30) %>% full_join(
+              Semana = 1:49) %>% full_join(
   normas_data %>%
   mutate(Semana = lubridate::epiweek(data)) %>%
   group_by(Semana,UF) %>%
@@ -438,14 +440,15 @@ normas_tema_acum_long %>%
                       'infraestrutura',
                       'relacoes_intergovernamentais',
                       'gastos'),
-                    c("Processos de serviços de saúde",
-                      "Recursos Humanos",
-                      "Ações de vigilância epidemiológica",
-                      "Infraestrutura",
-                      "Relações intergovernamentais",
-                      "Gastos"))) %>%
-  dplyr::filter(Semana>6) %>%
-  left_join(br.io) %>% #depois colocar empilhado
+                    c("Health Processes",
+                      "Human Resources",
+                      "Epidemiological Surveillance",
+                      "Infrastructure",
+                      "Intergovernmental relations",
+                      "Spending"))) %>%
+ # dplyr::filter(Semana>6) %>%
+  #left_join(br.io) %>% #depois colocar empilhado
+  
   ggplot(aes(x=Semana,fill=name,color=name,y=value)) +
   geom_area(position = "stack",color=NA,stat = "identity",alpha=.75) +
   geom_line(aes(y=obitos_acum_milhao/6),
