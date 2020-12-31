@@ -14,6 +14,8 @@ library(data.table)
 
 # Regiões e estadosbrasil ----
 estados <- read_state()
+
+
 # Codificação das regiões
 cods_ibge <- estados %>% 
   dplyr::select(codigo_uf="code_state",UF="abbrev_state",
@@ -38,7 +40,8 @@ SRAG <- SRAG_raw %>%
   dplyr::filter(tipo=="Estado",escala=="casos",sexo=="Total",#semana_epidemiologica<22,
                 dado%in%c("srag","sragcovid")) %>%
   group_by(codigo_uf=uf,unidade_da_federacao,semana_epidemiologica,ano_epidemiologico,dado) %>%
-  summarise(casos=sum(casos_semanais_reportados_ate_a_ultima_atualizacao,#total_reportado_ate_a_ultima_atualizacao,## mudou o nome da variavel
+  summarise(casos=sum(casos_semanais_reportados_ate_a_ultima_atualizacao,
+                      #total_reportado_ate_a_ultima_atualizacao,## mudou o nome da variavel
                       na.rm = T)) %>%
   ungroup() %>%
   mutate(ano_2020 = (ano_epidemiologico>2019)) %>%
@@ -81,26 +84,28 @@ verf <- SRAG_raw %>%
 
 # Por UF (DF)
 SRAG %>%
-  dplyr::filter(Semana<29) %>%
-  dplyr::filter(UF=="DF") %>%
+#  dplyr::filter(Semana<29) %>% # Semana
+#  dplyr::filter(UF=="DF") %>% # DF
   ggplot(aes(x=Semana)) +
-  geom_area(aes(y=srag_excesso_100k,fill="SRAG excedente"),alpha=.5) +
+#  geom_area(aes(y=srag_excesso_100k,fill="SRAG excedente"),alpha=.5) + #Portugues
+  geom_area(aes(y=srag_excesso_100k,fill="Exceeding SARS"),alpha=.5) + #Ingles
   geom_area(aes(y=covid_100k,fill="COVID-19")) +
   # scale_x_continuous(breaks = c(4,8,12,16,20,24,28),
   #                    labels = c("25.jan","22.fev","21.mar","18.abr",
   #                               "16.mai","13.jun","11.jul"),
   #                    limits = c(10,25)) +
-  scale_x_continuous("Dia (dado semanal)",
-                     breaks = c(10,15,20,25),
-                     labels = c("07.mar","11.abr",
-                                "16.mai","20.jun"),
-                     limits = c(10,28)) +
+  # scale_x_continuous("Dia (dado semanal)",
+  #                    breaks = c(10,15,20,25),
+  #                    labels = c("07.mar","11.abr",
+  #                               "16.mai","20.jun"),
+  #                    limits = c(10,28)) +
   facet_wrap(vars(UF)) +
-  labs(fill="",y="Casos por 100k hab") +
+  #labs(fill="",y="Casos por 100k hab") + #Por 
+  labs(fill="",y="Cases/100k",x="Week") +
   hrbrthemes::theme_ipsum() +
   theme(legend.position = "top",
-        panel.spacing=grid::unit(.25, "lines"),
-        plot.margin = ggplot2::margin(2, 2, 2, 2))
+        panel.spacing=grid::unit(.1, "lines"),
+        plot.margin = ggplot2::margin(1, 1, 1, 1))
 
 
 # Brasil
@@ -162,6 +167,7 @@ govs <- gov_url %>%
   # ideologia e orientacao 
   mutate(
     partido = mgsub(partido,c("PSB\nCidadania [2]","PHS\nDEM","Sem Partido"),c("Cidadania","DEM","PSL")),
+    partido = gsub("PSL\nPSL","PSL",partido),
     ideologia = case_when(
       partido %in% c("DEM","MDB","NOVO",
                      "DEM","PP","PSC",
@@ -261,11 +267,11 @@ normas_plan <- "https://docs.google.com/spreadsheets/d/1uZuSbqxywEwJiF4uBnc4yofI
 # normas <- googlesheets4::read_sheet(normas_plan,sheet = 3,range = "B2:AC985",
 #                                 col_types = "cDcccccccccccccccccccccccccc") 
 
-normas_data <- googlesheets4::read_sheet(normas_plan,sheet = 3,range = "A1:AD1824",
+normas_data <- googlesheets4::read_sheet(normas_plan,sheet = 3,range = "A1:AD2835",
                   col_types = "cDDccccccccccccccccccccccccccc") %>%
   janitor::clean_names() %>%
   mutate_at(vars(9:30),as.numeric) %>%
-  mutate_if(is.numeric, function(x) ifelse(is.na(x), 0, x)) %>%
+  mutate_if(is.numeric,replace_na,replace = 0) %>%
   rename(UF=estado)
 
 normas <- 
@@ -445,10 +451,10 @@ normas_tema_acum_long %>%
   geom_line(aes(y=obitos_acum_milhao/6),
             color="black") +
   facet_wrap(vars(UF),ncol=7) +
-  scale_x_continuous(name="Mês",
-                     limits = c(7,30),
-                     breaks = c(11.5,19.5,27.5),
-                     labels = c("Mar","Mai","Jul")) +
+  # scale_x_continuous(name="Mês",
+  #                    limits = c(7,30),
+  #                    breaks = c(11.5,19.5,27.5),
+  #                    labels = c("Mar","Mai","Jul")) +
   scale_y_continuous(
     name = "Normas (barras)",
     sec.axis = sec_axis( trans=~.*12, 
@@ -456,6 +462,32 @@ normas_tema_acum_long %>%
   ) +
   labs(
        fill="") +
+  theme_minimal() +
+  theme(legend.position = "bottom")
+
+
+
+# covid e normas ao longo do tempo
+normas_tema_acum_long %>%
+  group_by(UF, Semana) %>%
+  summarise(normas=sum(value,na.rm=T))
+  left_join(SRAG %>% dplyr::select()) %>% 
+  ggplot(aes(x=Semana,fill=name,color=name,y=value)) +
+  geom_area(position = "stack",color=NA,stat = "identity",alpha=.75) +
+  geom_line(aes(y=obitos_acum_milhao/6),
+            color="black") +
+  facet_wrap(vars(UF),ncol=7) +
+  # scale_x_continuous(name="Mês",
+  #                    limits = c(7,30),
+  #                    breaks = c(11.5,19.5,27.5),
+  #                    labels = c("Mar","Mai","Jul")) +
+  scale_y_continuous(
+    name = "Normas (barras)",
+    sec.axis = sec_axis( trans=~.*12, 
+                         name="Óbitos por milhão (linhas)")
+  ) +
+  labs(
+    fill="") +
   theme_minimal() +
   theme(legend.position = "bottom")
 
