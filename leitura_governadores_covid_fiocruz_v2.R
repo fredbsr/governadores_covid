@@ -33,15 +33,20 @@ pop %<>%
 # SRAG ----
 raw = "https://gitlab.procc.fiocruz.br/mave/repo/-/raw/master/Dados/InfoGripe/dados_semanais_faixa_etaria_sexo_virus_sem_filtro_sintomas.csv"
 #raw = "https://gitlab.procc.fiocruz.br/mave/repo/-/raw/master/Dados/InfoGripe/serie_temporal_com_estimativas_recentes_sem_filtro_sintomas.csv"
-SRAG_raw <- read_csv2(raw) %>% 
+SRAG_raw <- read_csv2(raw) %>% as_tibble() %>%
   janitor::clean_names() 
 
 # write_rds(SRAG_raw,"SRAG_raw.rds")
 # SRAG_raw <- read_rds("SRAG_raw.rds")
 
-SRAG <- SRAG_raw %>% 
+
+SRAG <- SRAG_raw %>% dplyr::select(tipo,escala,sexo,
+                                   dado,uf,unidade_da_federacao,
+                                   semana_epidemiologica,ano_epidemiologico,
+                                   casos_semanais_reportados_ate_a_ultima_atualizacao) %>%
   dplyr::filter(tipo=="Estado",escala=="casos",sexo=="Total",#semana_epidemiologica<22,
-                dado %in% c("srag","sragcovid")) %>%
+                dado %in% c("srag","sragcovid"),
+                ano_epidemiologico<2021) %>%
   group_by(codigo_uf=uf,unidade_da_federacao,semana_epidemiologica,ano_epidemiologico,dado) %>%
   summarise(casos=sum(casos_semanais_reportados_ate_a_ultima_atualizacao,
                       #total_reportado_ate_a_ultima_atualizacao,## mudou o nome da variavel
@@ -99,7 +104,7 @@ janelas_join <- janelas_analise %>%
 SRAG %>%
 #  dplyr::filter(Semana<29) %>% # Semana
    dplyr::filter(Semana>10) %>% # Semana
-#  dplyr::filter(UF=="DF") %>% # DF
+  dplyr::filter(UF=="DF") %>% # DF
   ggplot(aes(x=Semana)) +
 #  geom_area(aes(y=srag_excesso_100k,fill="SRAG excedente"),alpha=.5) + #Portugues
   geom_area(aes(y=srag_excesso_100k,fill="Exceeding SARS"),alpha=.5) + #Ingles
@@ -160,24 +165,33 @@ SRAG %>%
   ) %>%
   #  dplyr::filter(Semana<24) %>%
   ggplot(aes(x=Semana)) +
-  geom_area(aes(y=srag_excesso,fill="excedente"),alpha=.5) +
+  geom_area(aes(y=srag_excesso,fill="Exceeding SARS"),alpha=.5) +
   geom_area(aes(y=covid,fill="COVID-19")) +
-  annotate(geom="rect",#fill=c("blue","blue","green","blue"),
-                           xmin=janelas_analise$start,
-                           xmax=janelas_analise$end,
+  annotate(geom="rect",fill=c("red","yellow","green","red"),
+                           xmin=janelas_analise$start-.5,
+                           xmax=janelas_analise$end+.5,
                            ymin=0,
-                           ymax=Inf,alpha=.1) +
-  annotate(geom="text",label=c("t1","t2","t3","t4"),
+                           ymax=Inf,alpha=.15) +
+  annotate(geom="text",label=c("t1\n(w6 to w17)\nBeginning of first wave",
+                               "t2\n(w6 to w17)\nPlateau",
+                               "t3\n(w6 to w17)\nDecreasing",
+                               "t4\n(w6 to w17)\nBeginning of second wave"),
+           vjust=1,size=3,
            x=c(c(janelas_analise$start)+c(janelas_analise$end))/2,
-           y=c(rep(35000,4))) +
+           y=c(rep(40000,4))) +
   scale_x_continuous(breaks = c(seq(5,50,by=5))) +
   # scale_x_continuous(limits = c(7,47),
   #                    breaks = c(3,7.5,11.5,15.5,19.5,23.5,27.5,31.5,35.5,39.5,43.5,47.5),
   #                    labels = c("Jan","Fev","Mar","Abr","Mai","Jun","Jul","Ago","Set","Out","Nov","Dez")) +
-  labs(fill="",y="Casos novos",x="") +
+  labs(fill="",y="Casos novos",x="",
+       caption = "Source: OpenDataSUS,2020\n
+                  (Exceeding SARS is the 2020 values 
+                  excedding 2009-2019 median)") +
   hrbrthemes::theme_ipsum() +
   theme(legend.position = "top",
         panel.spacing=grid::unit(.15, "lines"),
+        panel.grid = element_line(size=.25,color = "grey75"),
+        panel.grid.minor.x = element_blank(),
         plot.margin = ggplot2::margin(1, 1, 1, 1))  
 
 # COVID Brasil.io ----
@@ -569,7 +583,7 @@ normas_tema_acum_long %>%
 
 
 # Cestas de normas
-cestas1 <- normas_tema_acum_long %>%
+cestas <- normas_tema_acum_long %>%
   mutate(name=mgsub(name,
                     c('processos_de_servicos_de_saude',
                       'recursos_humanos',
@@ -583,21 +597,15 @@ cestas1 <- normas_tema_acum_long %>%
                       "Infraestrutura",
                       "Articulação",
                       "Gastos"))) %>%
-  dplyr::filter(Semana==30) %>%
+  #Selecionando apenas a ultima semana da amostra
+  dplyr::filter(Semana==max(normas_tema_acum_long$Semana)) %>%
+  # excluindo o valor de semana
   dplyr::select(-Semana) %>%
   group_by(UF) %>% 
-  mutate(pct=prop.table(value))
+  mutate(pct=prop.table(value),
+         normas=sum(value,na.rm=T)) %>%
+  ungroup()
 
-
-cestas <- cestas1 %>% left_join(cestas %>%
-                        group_by(UF) %>%
-                        summarise(normas=sum(value,na.rm=T))) %>%
-  left_join(cestas %>% group_by(UF) %>%
-              dplyr::filter(value==max(value)) %>%
-              dplyr::select(UF,tipo=name)) %>%
-  left_join(br.io %>% 
-              dplyr::filter(Semana==30) %>% 
-              dplyr::select(UF,obitos_acum_milhao))
 
 cestas %>%
   ggplot() +
@@ -642,14 +650,15 @@ bask1 <- cestas %>%
   ggplot() +
   geom_bar(aes(fill=str_wrap(name,25),y=reorder(UF,normas),#-as.numeric(UF)),#y=reorder(UF,obitos_acum_milhao),#
                x=pct
-  ),width = .6,
+  ),width = .6, alpha=.75,
   position = "stack",
   stat = "identity") +
   scale_x_continuous(labels=scales::percent) +
   labs(fill="",y="",x="") + 
   theme_minimal() +
   theme(strip.text.y = element_text(angle = 0),
-        legend.position = "right")
+        legend.position = "none",
+        plot.margin = margin(0, 0, 0, 0, "cm"))
 
 
 bask2 <- cestas %>%
@@ -676,16 +685,52 @@ bask2 <- cestas %>%
   position = "stack",
   stat = "identity") +
   labs(fill="",y="",x="") + 
-  scale_x_reverse() +
+  scale_x_reverse(expand = c(0,0)) +
   theme_minimal() +
   theme(strip.text.y = element_text(angle = 0),
         axis.text.y = element_blank(),
         axis.ticks.y = element_blank(),
-        legend.position = "right",
-        plot.margin = )
+        legend.position = "none",
+        plot.margin = margin(0, 0, 0, 0, "cm"))
 
 
-bask2 + bask1
+bask3 <- cestas %>% group_by(name) %>%
+  summarise(n=sum(value,na.rm=T)) %>% ungroup() %>%
+  mutate(perc=prop.table(n),
+         name=mgsub(name,
+                    c("Processos",
+                      "RH",
+                      "Vigilância",
+                      "Infraestrutura",
+                      "Articulação",
+                      "Gastos"),
+                    c("Health Services Working Processes",
+                      "Human Resources",
+                      "Epidemiological Surveillance",
+                      "Infrastructure",
+                      "Intergovernmental relations",
+                      "Spending"))) %>%
+
+  ggplot(aes(x=str_wrap(name,10),y=n,fill=name)) +
+  geom_bar(width = .6,position = "dodge",stat = "identity", alpha=.75) +
+  geom_text(aes(label=n,y=0),angle=90,hjust=0,size=3.5,fontface="bold") +
+  geom_text(aes(label=paste0(round(perc*100,0),"%")),vjust=0,size=3.5,fontface="bold") +
+  scale_y_continuous(limits = c(0,1500)) +
+  labs(fill="",y="",x="") +
+  theme_minimal() +
+  theme(strip.text.y = element_text(angle = 0),
+        axis.text.y = element_blank(),
+        axis.ticks.y = element_blank(),
+        legend.position = "none",
+        plot.margin = margin(0, 0, 0, 0, "cm"))
+
+bask2 + bask1 + bask3 + plot_layout(design = "
+  333
+  122
+  122
+  122
+  
+")
 
   # Subtemas
 normas_subtemas_long <- normas_tema_acum %>%
@@ -977,10 +1022,13 @@ serie_dia <- dados_abertos_perfil %>%
          mm3_covid=forecast::ma(covid,3),
          mm5_covid=forecast::ma(covid,5),
          mm7_covid=forecast::ma(covid,7),
-         mm14_covid=forecast::ma(covid,14))
+         mm14_covid=forecast::ma(covid,14),
+         mm7_obitos=forecast::ma(obitos,7))
+
 
 serie_dia %>%
-  dplyr::filter(data>lubridate::dmy("01-03-2020")) %>%
+  dplyr::filter(data>lubridate::dmy("01-03-2020"),
+                data<lubridate::dmy("01-02-2021")) %>%
 
   ggplot(aes(x=data)) +
   geom_area(aes(y=covid,fill="Registros do dia"),alpha=.5) +
@@ -993,13 +1041,49 @@ serie_dia %>%
   #          lubridate::month(data,label = T),"->",round(mm7_covid,0)," casos")),
   #          vjust=-.50,hjust=1,fontface="bold") +
   geom_text(data=.%>%
-              dplyr::filter(mm7_covid==max(mm7_covid,na.rm=T)),
+              dplyr::filter(mm7_covid==max(mm7_covid,na.rm=T),lubridate::year(data)==2020),
             aes(x=data,y=mm7_covid,
-                label=paste0("Pico(mm): ",lubridate::day(data) ,".",
+                label=paste0("Pico 2020: ",lubridate::day(data) ,".",
                              lubridate::month(data,label = T),"->",round(mm7_covid,0)," casos")),
             vjust=-.50,hjust=1,fontface="bold") +
+  geom_text(data=.%>%
+              dplyr::filter(lubridate::year(data)==2021) %>%
+              dplyr::filter(mm7_covid==max(mm7_covid,na.rm=T)),
+            aes(x=data,y=mm7_covid,
+                label=paste0("Pico 2021: ",lubridate::day(data) ,".",
+                             lubridate::month(data,label = T),"->",round(mm7_covid,0)," casos")),
+            vjust=-.50,hjust=1,fontface="bold") +
+  scale_x_date(date_labels = "%b %y") +#,position = "top") +
   labs(fill="",y="Casos novos (registrados)",color="",x="",
-       caption="Fonte: SSP-DF, 2020.") +
+       caption="Fonte: SSP-DF, 2021.") +
+  hrbrthemes::theme_ipsum() +
+  theme(legend.position = "top",
+        panel.spacing=grid::unit(.25, "lines"),
+        plot.margin = ggplot2::margin(2, 2, 2, 2))
+
+# obitos DF
+serie_dia %>%
+  dplyr::filter(data>lubridate::dmy("01-03-2020")) %>%
+  
+  ggplot(aes(x=data)) +
+  geom_area(aes(y=obitos,fill="Registros do dia"),alpha=.5) +
+  geom_line(aes(y=mm7_obitos,color="Média móvel (7 dias)"),size=1.5) +
+  geom_text(data=.%>%
+              dplyr::filter(lubridate::year(data)==2020) %>%
+              dplyr::filter(mm7_obitos==max(mm7_obitos,na.rm=T)),
+            aes(x=data,y=mm7_obitos,
+                label=paste0("Pico 2020: ",lubridate::day(data) ,".",
+                             lubridate::month(data,label = T),"->",round(mm7_obitos,0)," óbitos")),
+            vjust=-.50,hjust=1,fontface="bold") +
+  geom_text(data=.%>%
+              dplyr::filter(lubridate::year(data)==2021) %>%
+              dplyr::filter(mm7_obitos==max(mm7_obitos,na.rm=T)),
+            aes(x=data,y=mm7_obitos,
+                label=paste0("Pico 2021: ",lubridate::day(data) ,".",
+                             lubridate::month(data,label = T),"->",round(mm7_obitos,0)," óbitos")),
+            vjust=-.50,hjust=1,fontface="bold") +
+  labs(fill="",y="Óbitos",color="",x="",
+       caption="Fonte: SSP-DF, 2021.") +
   hrbrthemes::theme_ipsum() +
   theme(legend.position = "top",
         panel.spacing=grid::unit(.25, "lines"),
