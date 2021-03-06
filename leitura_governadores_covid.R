@@ -1,4 +1,4 @@
-# leitura de dados
+# leitura de dados 
 #remotes::install_github("liibre/coronabr")
 devtools::install_github("tbrugz/ribge")
 library(ribge)
