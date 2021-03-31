@@ -13,15 +13,18 @@ library(sf)
 library(textclean)
 library(data.table)
 library(patchwork)
+library(tsibble)
+library(readr)
 
 # Regiões e estadosbrasil ----
-estados <- read_state()
+estados <- read_state() 
 
 
 # Codificação das regiões
 cods_ibge <- estados %>% 
   dplyr::select(codigo_uf="code_state",UF="abbrev_state",
-                "code_region",Regiao="name_region") 
+                "code_region",Regiao="name_region",Estado="name_state") %>%
+  mutate(Estado=mgsub(Estado,c(" Da "," De "," Do "),c(" da "," de "," do ")))
 st_geometry(cods_ibge) <- NULL
 
 # Estado
@@ -30,23 +33,49 @@ pop %<>%
   group_by(codigo_uf) %>%
   summarise(populacao = sum(populacao,na.rm=T))
 
+cods_ibge %<>% left_join(pop)
+
+rm(pop)
+
 # SRAG ----
 raw = "https://gitlab.procc.fiocruz.br/mave/repo/-/raw/master/Dados/InfoGripe/dados_semanais_faixa_etaria_sexo_virus_sem_filtro_sintomas.csv"
-#raw = "https://gitlab.procc.fiocruz.br/mave/repo/-/raw/master/Dados/InfoGripe/serie_temporal_com_estimativas_recentes_sem_filtro_sintomas.csv"
-SRAG_raw <- read_csv2(raw) %>% as_tibble() %>%
+
+SRAG_raw <- 
+  read_delim(raw,";",escape_double = FALSE, 
+             col_types = cols(`Idade desconhecida` = col_skip(),
+                              `< 2 anos` = col_skip(), `0-4 anos` = col_skip(), 
+                              `10-19 anos` = col_skip(), `2-4 anos` = col_skip(), 
+                              `20-29 anos` = col_skip(), `30-39 anos` = col_skip(), 
+                              `40-49 anos` = col_skip(), `5-9 anos` = col_skip(), 
+                              `50-59 anos` = col_skip(), `60+ anos` = col_skip(), 
+                              `Testes positivos` = col_skip(), 
+                              `Testes negativos` = col_skip(), 
+                              `Casos aguardando resultado` = col_skip(), 
+                              `Casos sem informação laboratorial` = col_skip(), 
+                              `Casos sem teste laboratorial` = col_skip(), 
+                              `Resultado inconclusivo` = col_skip(), 
+                              `Influenza A` = col_skip(), `Influenza B` = col_skip(), 
+                              `SARS-CoV-2` = col_skip(), `Vírus sincicial respiratório (VSR)` = col_skip(), 
+                              `Parainfluenza 1` = col_skip(), `Parainfluenza 2` = col_skip(), 
+                              `Parainfluenza 3` = col_skip(), `Parainfluenza 4` = col_skip(), 
+                              Adenovirus = col_skip(), Rinovirus = col_skip(), 
+                              Bocavirus = col_skip(), Metapneumovirus = col_skip(), 
+                              `Outros virus` = col_skip()), 
+             locale = locale(decimal_mark = ",", grouping_mark = "."), trim_ws = TRUE) %>%
   janitor::clean_names() 
 
-# write_rds(SRAG_raw,"SRAG_raw.rds")
+# write_rds(SRAG_raw,"SRAG_raw.rds"); rm(SRAG_raw,raw)
 # SRAG_raw <- read_rds("SRAG_raw.rds")
 
-
-SRAG <- SRAG_raw %>% dplyr::select(tipo,escala,sexo,
+SRAG <- 
+  bind_rows(
+  SRAG_raw %>% dplyr::select(tipo,escala,sexo,
                                    dado,uf,unidade_da_federacao,
                                    semana_epidemiologica,ano_epidemiologico,
                                    casos_semanais_reportados_ate_a_ultima_atualizacao) %>%
   dplyr::filter(tipo=="Estado",escala=="casos",sexo=="Total",#semana_epidemiologica<22,
                 dado %in% c("srag","sragcovid"),
-                ano_epidemiologico<2021) %>%
+                ano_epidemiologico!=2021) %>%
   group_by(codigo_uf=uf,unidade_da_federacao,semana_epidemiologica,ano_epidemiologico,dado) %>%
   summarise(casos=sum(casos_semanais_reportados_ate_a_ultima_atualizacao,
                       #total_reportado_ate_a_ultima_atualizacao,## mudou o nome da variavel
@@ -58,7 +87,7 @@ SRAG <- SRAG_raw %>% dplyr::select(tipo,escala,sexo,
   ungroup() %>%
   unite("dado_ano",ano_2020:dado) %>%
   pivot_wider(names_from = dado_ano,
-              values_from = casos) %>%
+              values_from = casos)  %>%
   transmute(codigo_uf=codigo_uf,
             Estado=unidade_da_federacao,
             Semana=semana_epidemiologica,
@@ -79,7 +108,58 @@ SRAG <- SRAG_raw %>% dplyr::select(tipo,escala,sexo,
          srag_excesso_100k = srag_excesso*10^5/populacao,
          srag_excesso_acum_100k = srag_excesso_acum*10^5/populacao
          ) %>%
-  left_join(cods_ibge)
+  left_join(cods_ibge) %>%
+    mutate(ano=2020),
+  
+  SRAG_raw %>% dplyr::select(tipo,escala,sexo,
+                                    dado,uf,unidade_da_federacao,
+                                    semana_epidemiologica,ano_epidemiologico,
+                                    casos_semanais_reportados_ate_a_ultima_atualizacao) %>%
+    dplyr::filter(tipo=="Estado",escala=="casos",sexo=="Total",#semana_epidemiologica<22,
+                  dado %in% c("srag","sragcovid"),
+                  ano_epidemiologico!=2020) %>%
+    group_by(codigo_uf=uf,unidade_da_federacao,semana_epidemiologica,ano_epidemiologico,dado) %>%
+    summarise(casos=sum(casos_semanais_reportados_ate_a_ultima_atualizacao,
+                        #total_reportado_ate_a_ultima_atualizacao,## mudou o nome da variavel
+                        na.rm = T)) %>%
+    ungroup() %>%
+    mutate(ano_2020 = (ano_epidemiologico==2021)) %>%
+    group_by(codigo_uf,unidade_da_federacao,semana_epidemiologica,ano_2020,dado) %>%
+    summarise(casos=median(casos,na.rm = T)) %>%
+    ungroup() %>%
+    unite("dado_ano",ano_2020:dado) %>%
+    pivot_wider(names_from = dado_ano,
+                values_from = casos) %>%
+    transmute(codigo_uf=codigo_uf,
+              Estado=unidade_da_federacao,
+              Semana=semana_epidemiologica,
+              srag_excesso = TRUE_srag - FALSE_srag,
+              srag_tot_2020 = TRUE_srag,
+              covid = TRUE_sragcovid,
+              covid_sub = srag_excesso - covid) %>%
+    group_by(codigo_uf) %>%
+    mutate(covid_acum=cumsum(covid),
+           covid_sub_acum=cumsum(covid_sub),
+           srag_excesso_acum = cumsum(srag_excesso)) %>%
+    ungroup() %>%
+    left_join(pop) %>%
+    mutate(covid_100k=covid*10^5/populacao,
+           covid_sub_100k=covid_sub*10^5/populacao,
+           covid_acum_100k=covid_acum*10^5/populacao,
+           covid_sub_acum_100k=covid_sub_acum*10^5/populacao,
+           srag_excesso_100k = srag_excesso*10^5/populacao,
+           srag_excesso_acum_100k = srag_excesso_acum*10^5/populacao
+    ) %>%
+    left_join(cods_ibge) %>%
+    mutate(ano=2021) %>% dplyr::filter(Semana<10) 
+  # filtrando para semanas existentes em 2021
+) %>% 
+  mutate(
+    ano_semana=tsibble::yearweek(paste(ano,Semana,sep = " W"))
+  )
+
+
+
 
 # write_rds(SRAG,"SRAG.rds")
 # SRAG <- read_rds("SRAG.rds")
@@ -100,112 +180,26 @@ janelas_analise <- googlesheets4::read_sheet(normas_plan,sheet = 4,range = "A1:C
 janelas_join <- janelas_analise %>%
   pivot_longer(-Stage,names_to="Fase",values_to="Semana")
 
-# Grafico Por UF (DF)
-SRAG %>%
-#  dplyr::filter(Semana<29) %>% # Semana
-   dplyr::filter(Semana>10) %>% # Semana
-  dplyr::filter(UF=="DF") %>% # DF
-  ggplot(aes(x=Semana)) +
-#  geom_area(aes(y=srag_excesso_100k,fill="SRAG excedente"),alpha=.5) + #Portugues
-  geom_area(aes(y=srag_excesso_100k,fill="Exceeding SARS"),alpha=.5) + #Ingles
-  geom_area(aes(y=covid_100k,fill="COVID-19")) +
-  # scale_x_continuous(breaks = c(4,8,12,16,20,24,28),
-  #                    labels = c("25.jan","22.fev","21.mar","18.abr",
-  #                               "16.mai","13.jun","11.jul"),
-  #                    limits = c(10,25)) +
-  # scale_x_continuous("Dia (dado semanal)",
-  #                    breaks = c(10,15,20,25),
-  #                    labels = c("07.mar","11.abr",
-  #                               "16.mai","20.jun"),
-  #                    limits = c(10,28)) +
-  facet_wrap(vars(UF)) +
-  #labs(fill="",y="Casos por 100k hab") + #Por 
-  labs(fill="",y="Cases/100k",x="Epidemiological Week (2020)",
-       caption = "Source: OpenDataSUS,2020\n
-                  (Exceeding SARS is the 2020 values 
-                  excedding 2009-2019 median)") +
-  hrbrthemes::theme_ipsum() +
-  theme(legend.position = "top",
-        panel.spacing=grid::unit(.15, "lines"),
-        plot.margin = ggplot2::margin(1, 1, 1, 1))
 
-
-# Grafico Brasil
-SRAG %>%
-  group_by(Semana) %>%
-  summarise(covid=sum(covid,na.rm=T),
-            srag_excesso = sum(srag_excesso,na.rm=T),
-            populacao=sum(populacao,na.rm=T)) %>%
-  ungroup() %>%
-  mutate(covid_100k=covid*10^5/populacao,
-         srag_excesso_100k = srag_excesso*10^5/populacao
-  ) %>%
-#  dplyr::filter(Semana<24) %>%
-  ggplot(aes(x=Semana)) +
-  geom_area(aes(y=srag_excesso,fill="SRAG excedente"),alpha=.5) +
-  geom_area(aes(y=covid,fill="COVID-19")) +
-  scale_x_continuous(limits = c(7,47),
-                     breaks = c(3,7.5,11.5,15.5,19.5,23.5,27.5,31.5,35.5,39.5,43.5,47.5),
-                     labels = c("Jan","Fev","Mar","Abr","Mai","Jun","Jul","Ago","Set","Out","Nov","Dez")) +
-  labs(fill="",y="Casos novos",x="") +
-  hrbrthemes::theme_ipsum() +
-  theme(legend.position = "top",
-        panel.spacing=grid::unit(.15, "lines"),
-        plot.margin = ggplot2::margin(1, 1, 1, 1))  
-  
-# Grafico Brasil Ingles
-SRAG %>%
-  group_by(Semana) %>%
-  summarise(covid=sum(covid,na.rm=T),
-            srag_excesso = sum(srag_excesso,na.rm=T),
-            populacao=sum(populacao,na.rm=T)) %>%
-  ungroup() %>%
-  mutate(covid_100k=covid*10^5/populacao,
-         srag_excesso_100k = srag_excesso*10^5/populacao
-  ) %>%
-  #  dplyr::filter(Semana<24) %>%
-  ggplot(aes(x=Semana)) +
-  geom_area(aes(y=srag_excesso,fill="Exceeding SARS"),alpha=.5) +
-  geom_area(aes(y=covid,fill="COVID-19")) +
-  annotate(geom="rect",fill=c("red","yellow","green","red"),
-                           xmin=janelas_analise$start-.5,
-                           xmax=janelas_analise$end+.5,
-                           ymin=0,
-                           ymax=Inf,alpha=.15) +
-  annotate(geom="text",label=c("t1\n(w6 to w17)\nBeginning of first wave",
-                               "t2\n(w6 to w17)\nPlateau",
-                               "t3\n(w6 to w17)\nDecreasing",
-                               "t4\n(w6 to w17)\nBeginning of second wave"),
-           vjust=1,size=3,
-           x=c(c(janelas_analise$start)+c(janelas_analise$end))/2,
-           y=c(rep(40000,4))) +
-  scale_x_continuous(breaks = c(seq(5,50,by=5))) +
-  # scale_x_continuous(limits = c(7,47),
-  #                    breaks = c(3,7.5,11.5,15.5,19.5,23.5,27.5,31.5,35.5,39.5,43.5,47.5),
-  #                    labels = c("Jan","Fev","Mar","Abr","Mai","Jun","Jul","Ago","Set","Out","Nov","Dez")) +
-  labs(fill="",y="Casos novos",x="",
-       caption = "Source: OpenDataSUS,2020\n
-                  (Exceeding SARS is the 2020 values 
-                  excedding 2009-2019 median)") +
-  hrbrthemes::theme_ipsum() +
-  theme(legend.position = "top",
-        panel.spacing=grid::unit(.15, "lines"),
-        panel.grid = element_line(size=.25,color = "grey75"),
-        panel.grid.minor.x = element_blank(),
-        plot.margin = ggplot2::margin(1, 1, 1, 1))  
 
 # COVID Brasil.io ----
-br.io_raw <- fread("https://data.brasil.io/dataset/covid19/caso_full.csv.gz") %>% 
-  dplyr::filter(place_type=="state")
+br.io_raw <- fread("https://data.brasil.io/dataset/covid19/caso_full.csv.gz") %>%
+  mutate(date=ymd(date))
+
 br.io <- br.io_raw %>% 
-  dplyr::filter(date<dmy("01-01-2021")) %>%
-  group_by(UF=state,Semana=epidemiological_week) %>%
+  dplyr::filter(place_type=="state") %>% 
+  mutate(ano=lubridate::epiyear(date),
+         Semana=epiweek(date),
+         ano_semana=tsibble::yearweek(paste(ano,Semana,sep = " W"))) %>%
+  group_by(UF=state,ano,Semana,ano_semana) %>%
   summarise(casos=sum(new_confirmed,na.rm=T),
             obitos=sum(new_deaths,na.rm=T)) %>% 
   ungroup() %>%
-  arrange(Semana) %>%
+  arrange(ano_semana) %>%
   group_by(UF) %>%
-  mutate(casos_acum=cumsum(casos),
+  mutate(casos=forecast::ma(casos,7),
+         obitos=forecast::ma(obitos,7),
+         casos_acum=cumsum(casos),
          obitos_acum=cumsum(obitos)) %>%
   ungroup() %>%
   left_join(cods_ibge) %>%
@@ -215,7 +209,7 @@ br.io <- br.io_raw %>%
          obitos_milhao = obitos*10^6/populacao,
          obitos_acum_milhao = obitos_acum*10^6/populacao
   ) %>%
-  arrange(codigo_uf,Semana)
+  arrange(codigo_uf,ano_semana)
 
 
 rc.obito <- fread("https://data.brasil.io/dataset/covid19/obito_cartorio.csv.gz")
@@ -231,7 +225,8 @@ govs <- gov_url %>%
   rename(UF=abreviacao) %>%
   # ideologia e orientacao 
   mutate(
-    partido = mgsub(partido,c("PSB\nCidadania [2]","PHS\nDEM","Sem Partido"),c("Cidadania","DEM","PSL")),
+    partido = mgsub(partido,c("PSB\nCidadania [2]","PHS\nDEM","Sem Partido","Cidadania [2]"),
+                    c("Cidadania","DEM","PSL","Cidadania")),
     partido = gsub("PSL\nPSL","PSL",partido),
     ideologia = case_when(
       partido %in% c("DEM","MDB","NOVO",
@@ -286,6 +281,90 @@ govs <- gov_url %>%
 # Carta 19.abr outros não assinaram
 # "AC","AM","DF","MG","PR","RO","RR"
 # https://www.em.com.br/app/noticia/politica/2020/04/19/interna_politica,1140171/zema-nao-assina-carta-de-governadores-contra-bolsonaro.shtml
+
+# Dados da vacina ----
+estados %>%
+  dplyr::rename(codigo_uf=code_state,UF=abbrev_state,
+                Regiao=name_region,Estado=name_state) %>%
+  mutate(Estado=mgsub(Estado,c(" Da "," De "," Do "),c(" da "," de "," do "))) %>% 
+  left_join(readxl::read_xlsx("vacina_20210315.xlsx")) %>%
+  left_join(cods_ibge)  %>%
+  janitor::clean_names() -> mapa_vacinas 
+  
+mapa_vacinas %>%
+  ggplot() +
+  geom_sf(aes(fill=percent_de_la_poblacion_vacunada_2a_dosis),color=NA) +
+  geom_sf_text(aes(label=uf),size=3,alpha=.7,nudge_x=0) +
+  scale_fill_distiller(palette = "Spectral",direction =1) +
+  labs(fill="% completamente vacinados") +
+  theme_void() +
+  theme(legend.position = "none",
+        plot.margin = margin(t = 0, r = 0, b = 0, l = 0, unit = "lines"),
+        panel.spacing = unit(0, "lines")) -> g.mapa_vacina
+
+
+mapa_vacinas %>%
+  ggplot() +
+  geom_bar(aes(x=percent_de_la_poblacion_vacunada_1a_dosis/100,
+               y=reorder(uf,-as.numeric(factor(uf)))),color=NA,stat = "identity") +
+  
+  geom_bar(aes(fill=percent_de_la_poblacion_vacunada_2a_dosis,
+               x=percent_de_la_poblacion_vacunada_2a_dosis/100,
+               y=reorder(uf,-as.numeric(factor(uf)))),color=NA,stat = "identity") +
+  geom_text(aes(label=paste0(" ",round(percent_de_la_poblacion_vacunada_2a_dosis,1),"%"),
+               x=percent_de_la_poblacion_vacunada_2a_dosis/100,
+            y=reorder(uf,-as.numeric(factor(uf)))),
+            size=3,fontface="bold",color="white",hjust=0) +
+ 
+  geom_text(aes(label=paste0(" ",round(percent_de_la_poblacion_vacunada_1a_dosis,1),"%"),
+                x=percent_de_la_poblacion_vacunada_1a_dosis/100,
+                y=reorder(uf,-as.numeric(factor(uf)))),
+            size=2.5,color="black",hjust=0) +
+  
+  scale_x_continuous(labels = scales::percent) +
+  scale_fill_distiller(palette = "Spectral",direction =1) +
+  facet_grid(rows = vars(regiao),scales="free",space = "free") +
+  labs(fill="",x="Percentual de vacinados (barras coloridas = 2a. dose)",y="",caption = "Fonte: Secretarias Municipais de Saúde, 2021") + 
+  theme_minimal() +
+  theme(legend.position = "none",strip.text.y = element_text(angle=0)) -> g.barras_vacina
+
+g.mapa_vacina + g.barras_vacina + plot_layout(widths = c(3, 1))
+
+# Vacinas por incidencia
+
+mapa_vacinas %>% 
+  left_join(
+    SRAG %>% 
+      dplyr::filter(ano_semana %in% 
+                      c(yearweek("2021 W07"),
+                        yearweek("2021 W08"),
+                        yearweek("2021 W09"),
+                        yearweek("2021 W10"))) %>%
+  janitor::clean_names() %>%
+    group_by(codigo_uf) %>%
+    summarise(srag = mean(srag_excesso_100k,na.rm=T))) -> vacina_incidencia
+  
+
+vacina_incidencia %>% 
+  ggplot() +
+  geom_smooth(aes(y=percent_de_la_poblacion_vacunada_2a_dosis/100,
+                  x=srag),method="lm",size=.5,color="black") +
+  geom_point(aes(color=regiao,
+               y=percent_de_la_poblacion_vacunada_2a_dosis/100,
+               x=srag),size=4,alpha=.5) +
+
+  geom_text(aes(label=paste("  ",uf),
+                y=percent_de_la_poblacion_vacunada_2a_dosis/100,
+                x=srag),
+            size=3,fontface="bold",hjust=0) +
+  scale_y_continuous(labels = scales::percent) +
+  scale_fill_distiller(palette = "Spectral",direction =1) +
+#  facet_grid(rows = vars(regiao),scales="free",space = "free") +
+  labs(fill="",
+       y="Percentual de vacinados (2a. dose)",
+       x="Incidência média (último mês)") + 
+  theme_minimal() +
+  theme(legend.position = "none",strip.text.y = element_text(angle=0))
 
 
 
@@ -771,7 +850,7 @@ normas_subtemas_long <- normas_tema_acum %>%
   )  %>%
   left_join(br.io)
 
-# Fazendo varios graficos ao mesmo tempo
+# Fazendo varios graficos ao mesmo tempo de normas
 g <- purrr::map(levels(factor(normas_subtemas_long$tema)),
                 function(x) {
                   ggplot(data = filter(normas_subtemas_long,tema == x),
@@ -804,7 +883,7 @@ ggsave(file='g5.png',plot=g[[5]],width = 10,height = 6)
 ggsave(file='g6.png',plot=g[[6]],width = 10,height = 6)
 
 
-## BASE COMPLETA ####
+# BASE COMPLETA ####
 
 df <- SRAG %>%
   left_join(govs) %>%
@@ -948,17 +1027,16 @@ receitas_DF_jun2019 %<>% mutate(ano=2019)
 
 write_excel_csv2(receitas_DF,"receitas_DF_atejun.csv")
 
-## Dados infectados DF ----
-library(readr)
-dados_abertos <- read_delim("dados-abertos.csv", 
-                            ";", escape_double = FALSE, 
-                            col_types = cols(Data = col_date(format = "%d/%m/%Y"), 
-                                            `Data Cadastro` = col_date(format = "%d/%m/%Y"), 
-                                            dataPrimeirosintomas = col_date(format = "%d/%m/%Y")), 
-                            trim_ws = TRUE)
+# Dados DF SSP ----
+# dados_abertos <- read_delim("dados-abertos.csv", 
+#                             ";", escape_double = FALSE, 
+#                             col_types = cols(Data = col_date(format = "%d/%m/%Y"), 
+#                                             `Data Cadastro` = col_date(format = "%d/%m/%Y"), 
+#                                             dataPrimeirosintomas = col_date(format = "%d/%m/%Y")), 
+#                             trim_ws = TRUE)
 
 # Perfil
-url_dados <- "https://covid19.ssp.df.gov.br/resources/dados/dados-abertos.csv"
+#url_dados <- "https://covid19.ssp.df.gov.br/resources/dados/dados-abertos.csv"
 url_dados <- "https://covid19.ssp.df.gov.br/resources/dados/dados-abertos.csv?param=[random]"
 
 dados_abertos <- read_delim(url_dados, ";",escape_double = FALSE, 
@@ -1027,8 +1105,9 @@ serie_dia <- dados_abertos_perfil %>%
 
 
 serie_dia %>%
-  dplyr::filter(data>lubridate::dmy("01-03-2020"),
-                data<lubridate::dmy("01-02-2021")) %>%
+  dplyr::filter(data>lubridate::dmy("01-03-2020")#,
+                #data<lubridate::dmy("01-02-2021")
+                ) %>%
 
   ggplot(aes(x=data)) +
   geom_area(aes(y=covid,fill="Registros do dia"),alpha=.5) +
@@ -1061,9 +1140,41 @@ serie_dia %>%
         panel.spacing=grid::unit(.25, "lines"),
         plot.margin = ggplot2::margin(2, 2, 2, 2))
 
+
+serie_dia %>%
+  dplyr::filter(#data>lubridate::dmy("31-01-2021")#,
+                #data<lubridate::dmy("01-02-2021")
+  ) %>%
+  
+  ggplot(aes(x=data)) +
+  geom_area(aes(y=covid,fill="Registros do dia"),alpha=.5) +
+  geom_line(aes(y=mm7_covid,color="Média móvel (7 dias)"),size=1.5) +
+  geom_text(data=.%>%
+              dplyr::filter(lubridate::year(data)==2020) %>%
+              dplyr::filter(mm7_covid==max(mm7_covid,na.rm=T)),
+            aes(x=data,y=mm7_covid,
+                label=paste0(format(data,"%d.%b"),": ",format(round(mm7_covid,0),big.mark= ".")," casos")),
+            vjust=-.50,hjust=1,fontface="bold") +
+  geom_text(data=.%>%
+              dplyr::filter(lubridate::year(data)==2021) %>%
+              dplyr::filter(mm7_covid==max(mm7_covid,na.rm=T)),
+            aes(x=data,y=mm7_covid,
+                label=paste0(format(data,"%d.%b"),": ",format(round(mm7_covid,0),big.mark= ".")," casos")),
+            vjust=-.50,hjust=1,fontface="bold") +
+  scale_x_date(date_labels = "%b %y") +#,position = "top") +
+#  scale_y_continuous(limits = c(5.5,8)) +
+  labs(fill="",y="Casos novos (registrados)",color="",x="",
+       caption="Fonte: SSP-DF, 2021.") +
+  hrbrthemes::theme_ipsum() +
+  theme(legend.position = "top",
+        panel.spacing=grid::unit(.25, "lines"),
+        plot.margin = ggplot2::margin(2, 2, 2, 2))
+
 # obitos DF
 serie_dia %>%
-  dplyr::filter(data>lubridate::dmy("01-03-2020")) %>%
+  dplyr::filter(data>lubridate::dmy("01-03-2020"),
+                data<lubridate::dmy("20-03-2021")
+                ) %>%
   
   ggplot(aes(x=data)) +
   geom_area(aes(y=obitos,fill="Registros do dia"),alpha=.5) +
@@ -1072,15 +1183,15 @@ serie_dia %>%
               dplyr::filter(lubridate::year(data)==2020) %>%
               dplyr::filter(mm7_obitos==max(mm7_obitos,na.rm=T)),
             aes(x=data,y=mm7_obitos,
-                label=paste0("Pico 2020: ",lubridate::day(data) ,".",
-                             lubridate::month(data,label = T),"->",round(mm7_obitos,0)," óbitos")),
+                label=paste0("Max20: ",lubridate::day(data) ,".",
+                             lubridate::month(data,label = T)," > ",round(mm7_obitos,0)," óbitos")),
             vjust=-.50,hjust=1,fontface="bold") +
   geom_text(data=.%>%
               dplyr::filter(lubridate::year(data)==2021) %>%
               dplyr::filter(mm7_obitos==max(mm7_obitos,na.rm=T)),
             aes(x=data,y=mm7_obitos,
-                label=paste0("Pico 2021: ",lubridate::day(data) ,".",
-                             lubridate::month(data,label = T),"->",round(mm7_obitos,0)," óbitos")),
+                label=paste0("Max21: ",lubridate::day(data) ,".",
+                             lubridate::month(data,label = T)," > ",round(mm7_obitos,0)," óbitos")),
             vjust=-.50,hjust=1,fontface="bold") +
   labs(fill="",y="Óbitos",color="",x="",
        caption="Fonte: SSP-DF, 2021.") +
