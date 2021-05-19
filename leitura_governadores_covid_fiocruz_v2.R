@@ -174,7 +174,7 @@ SRAG <-
 #   distinct()
 
 normas_plan <- "https://docs.google.com/spreadsheets/d/1uZuSbqxywEwJiF4uBnc4yofIE9EH8oFG2maqhVfOrWk/edit#gid=1846588799"
-janelas_analise <- googlesheets4::read_sheet(normas_plan,sheet = 4,range = "A1:C5")#,
+janelas_analise <- googlesheets4::read_sheet(normas_plan,sheet = 6,range = "A1:C5") #planilha 6,
                           #col_types = "cDDcccccccccccc")
 
 janelas_join <- janelas_analise %>%
@@ -1173,7 +1173,7 @@ serie_dia %>%
 # obitos DF
 serie_dia %>%
   dplyr::filter(data>lubridate::dmy("01-03-2020"),
-                data<lubridate::dmy("20-03-2021")
+                data<lubridate::dmy("10-05-2021")
                 ) %>%
   
   ggplot(aes(x=data)) +
