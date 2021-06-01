@@ -28,7 +28,7 @@ SRAG %>%
   facet_wrap(vars(UF),ncol = 5) +
   #labs(fill="",y="Casos por 100k hab") + #Por 
   labs(fill="",y="Cases/100k",x="Epidemiological Week",
-       caption = "Source: OpenDataSUS,2020\n
+       caption = "Source: InfoGripe,2020\n
                   (Exceeding SARS is current values 
                   excedding 2009-2019 median)") +
   hrbrthemes::theme_ipsum() +
@@ -53,7 +53,7 @@ g.srag <- purrr::map(levels(factor(SRAG$Regiao)),
                                           date_labels = "%b%y") +
                          facet_wrap(vars(UF),ncol = 3) +
                          labs(fill="",y="Casos/100k",x="",
-                              caption = "OpenDataSUS,2020",
+                              caption = "InfoGripe,2020",
                               title = x) +
                          hrbrthemes::theme_ipsum() +
                          theme(legend.position = "top",
@@ -101,7 +101,7 @@ SRAG %>%
   scale_x_yearweek(date_breaks = "2 months",
                    date_labels = "%b%y") +
   labs(fill="",y="Casos/100k",x="",
-       caption = "OpenDataSUS,2021") +
+       caption = "InfoGripe,2021") +
   # hrbrthemes::theme_ipsum() +
   theme_minimal() +
   theme(legend.position = "top",
@@ -110,6 +110,7 @@ SRAG %>%
 
 # Grafico Brasil Ingles
 SRAG %>%
+  dplyr::filter(ano==2020) %>%
   group_by(Semana) %>%
   summarise(covid=sum(covid,na.rm=T),
             srag_excesso = sum(srag_excesso,na.rm=T),
@@ -122,6 +123,7 @@ SRAG %>%
   ggplot(aes(x=Semana)) +
   geom_area(aes(y=srag_excesso,fill="Exceeding SARS"),alpha=.5) +
   geom_area(aes(y=covid,fill="COVID-19")) +
+
   annotate(geom="rect",fill=c("red","yellow","green","red"),
            xmin=janelas_analise$start-.5,
            xmax=janelas_analise$end+.5,
@@ -135,11 +137,10 @@ SRAG %>%
            x=c(c(janelas_analise$start)+c(janelas_analise$end))/2,
            y=c(rep(40000,4))) +
   scale_x_continuous(breaks = c(seq(5,50,by=5))) +
-  # scale_x_continuous(limits = c(7,47),
-  #                    breaks = c(3,7.5,11.5,15.5,19.5,23.5,27.5,31.5,35.5,39.5,43.5,47.5),
-  #                    labels = c("Jan","Fev","Mar","Abr","Mai","Jun","Jul","Ago","Set","Out","Nov","Dez")) +
+
+
   labs(fill="",y="Casos novos",x="",
-       caption = "Source: OpenDataSUS,2020\n
+       caption = "Source: InfoGripe,2020\n
                   (Exceeding SARS is the 2020 values 
                   excedding 2009-2019 median)") +
   hrbrthemes::theme_ipsum() +

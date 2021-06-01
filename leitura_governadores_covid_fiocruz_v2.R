@@ -100,15 +100,15 @@ SRAG <-
          covid_sub_acum=cumsum(covid_sub),
          srag_excesso_acum = cumsum(srag_excesso)) %>%
   ungroup() %>%
-  left_join(pop) %>%
+    left_join(cods_ibge) %>%
   mutate(covid_100k=covid*10^5/populacao,
          covid_sub_100k=covid_sub*10^5/populacao,
          covid_acum_100k=covid_acum*10^5/populacao,
          covid_sub_acum_100k=covid_sub_acum*10^5/populacao,
          srag_excesso_100k = srag_excesso*10^5/populacao,
-         srag_excesso_acum_100k = srag_excesso_acum*10^5/populacao
-         ) %>%
-  left_join(cods_ibge) %>%
+         srag_excesso_acum_100k = srag_excesso_acum*10^5/populacao,
+         perc_sub = 100*(srag_excesso_acum)/(srag_excesso_acum + covid_acum)) %>%
+
     mutate(ano=2020),
   
   SRAG_raw %>% dplyr::select(tipo,escala,sexo,
@@ -142,15 +142,16 @@ SRAG <-
            covid_sub_acum=cumsum(covid_sub),
            srag_excesso_acum = cumsum(srag_excesso)) %>%
     ungroup() %>%
-    left_join(pop) %>%
+    left_join(cods_ibge) %>%
     mutate(covid_100k=covid*10^5/populacao,
            covid_sub_100k=covid_sub*10^5/populacao,
            covid_acum_100k=covid_acum*10^5/populacao,
            covid_sub_acum_100k=covid_sub_acum*10^5/populacao,
            srag_excesso_100k = srag_excesso*10^5/populacao,
-           srag_excesso_acum_100k = srag_excesso_acum*10^5/populacao
+           srag_excesso_acum_100k = srag_excesso_acum*10^5/populacao,
+           perc_sub = 100*(srag_excesso_acum)/(srag_excesso_acum + covid_acum)
     ) %>%
-    left_join(cods_ibge) %>%
+
     mutate(ano=2021) %>% dplyr::filter(Semana<10) 
   # filtrando para semanas existentes em 2021
 ) %>% 
@@ -203,7 +204,6 @@ br.io <- br.io_raw %>%
          obitos_acum=cumsum(obitos)) %>%
   ungroup() %>%
   left_join(cods_ibge) %>%
-  left_join(pop) %>%
   mutate(casos_100k=casos*10^5/populacao,
          casos_acum_100k=casos_acum*10^5/populacao,
          obitos_milhao = obitos*10^6/populacao,
@@ -230,7 +230,7 @@ govs <- gov_url %>%
     partido = gsub("PSL\nPSL","PSL",partido),
     ideologia = case_when(
       partido %in% c("DEM","MDB","NOVO",
-                     "DEM","PP","PSC",
+                     "DEM","PP","PSC","PL",
                      "PSD","PSDB","PSL") ~ "Direita",
       partido %in% c("PCdoB","PDT","PSB",
                      "Cidadania",
@@ -243,6 +243,11 @@ govs <- gov_url %>%
     #   )
     partido_join = str_to_lower(partido),
     federalismo = case_when(
+      UF %in% c("AC","AM","DF","MG","PR",
+                "RO","RR","RJ","SC") ~ "Convergente",
+      TRUE ~ "Divergente"
+    ),
+    federalismo1 = case_when(
       UF %in% c("PR","SC","RO","RR","MG",
                 "GO","MT","TO") ~ "Convergente",
       TRUE ~ "Divergente"
@@ -252,7 +257,7 @@ govs <- gov_url %>%
       TRUE ~ "Divergente"
     ),
     federalismo3 = case_when(
-      partido %in% c("NOVO","PSC","PSL") ~ "Convergente",
+      partido %in% c("NOVO","PSC","PSL","PL") ~ "Convergente",
       partido %in% c("DEM","MDB",
                      "DEM","PP",
                      "PSD","PSDB","PCdoB","PDT","PSB",
@@ -260,12 +265,13 @@ govs <- gov_url %>%
                      "PT") ~ "Divergente"
     ),
     orientacao = paste(ideologia,federalismo),
+    orientacao1 = paste(ideologia,federalismo1),
     orientacao2 = paste(ideologia,federalismo2),
     orientacao3 = paste(ideologia,federalismo3)
   ) %>%
   dplyr::select(UF,partido,partido_join,
                 ideologia,federalismo,federalismo2,federalismo3,
-                orientacao,orientacao2,orientacao3) #%>%
+                orientacao,orientacao1,orientacao2,orientacao3) #%>%
   # left_join(
   #   mds %>% group_by(legislator_party) %>%
   # summarise(governismo = mean(dim1)) %>% 
@@ -369,28 +375,36 @@ vacina_incidencia %>%
 
 
 # Dados de testagem ----
-testes_url_18_06 <-'http://web.archive.org/web/20200618071354/https://g1.globo.com/bemestar/coronavirus/noticia/2020/06/10/veja-taxa-de-ocupacao-nas-utis-testes-feitos-e-pacientes-recuperados-da-covid-19-em-cada-estado-do-brasil.ghtml'
+test.wcota <- "https://raw.githubusercontent.com/wcota/covid19br/master/cases-brazil-states.csv"
 
-testes_url <- "https://g1.globo.com/bemestar/coronavirus/noticia/2020/06/10/veja-taxa-de-ocupacao-nas-utis-testes-feitos-e-pacientes-recuperados-da-covid-19-em-cada-estado-do-brasil.ghtml"
+test.wcota.data <- read_delim(test.wcota,",",escape_double = FALSE, locale = locale(encoding = "ISO-8859-1"), 
+                              trim_ws = TRUE)
 
-testes <- 
-#  testes_url_18_06 %>%
-  testes_url %>%
-  read_html() %>%
-  html_nodes('table') #%>% html_node(xpath = path_url) 
+dados_df <- read_delim("~/Desktop/dados-df.csv", 
+                       ";", escape_double = FALSE, locale = locale(encoding = "ISO-8859-1"), 
+                       trim_ws = TRUE)
 
-testagem <- testes[[1]] %>%
-  html_table(header=T) %>%
-  janitor::clean_names() %>%
-  rename(testes = nº_de_testes,
-         Estado = estado) %>%
-  mutate(testes=gsub("\\(.*\\)","", testes),
-         testes=gsub("[^0-9,-]", "", testes),
-         testes=gsub(" ", "", testes),
-         testes=as.numeric(testes)) %>% 
-#  mutate(testes=as.numeric(gsub("\\.","",testes))) %>% 
-  dplyr::filter(Estado != "Total") 
+dados_df %<>% 
+  dplyr::select(estado,estadoTeste,dataTeste,tipoTeste,resultadoTeste) %>%
+  dplyr::filter(dataTeste !="null") %>%
+  mutate(dataTeste = ymd(str_sub(dataTeste,end=10))) %>%
+  dplyr::filter(lubridate::year(dataTeste)>2019)
 
+i <- incidence(dados_df$dataTeste)
+i
+plot(i)
+i.7 <- incidence(dados_df$dataTeste, interval = "1 week")
+plot(i.7)
+
+
+#Muitos grupos
+i.7.tipo <- with(dados_df %>% dplyr::filter(lubridate::year(dataTeste)==2020),
+                 incidence(dataTeste, interval = "week", groups = tipoTeste))
+i.7.tipo
+
+plot(i.7.tipo, stack=TRUE) +
+  theme(legend.position= "top") +
+  labs(fill="",y="Testagem")
 
 testagem %>% left_join(SRAG) %>%
   mutate(tx_teste = testes*10^4/populacao) %>%
@@ -400,20 +414,6 @@ testagem %>% left_join(SRAG) %>%
   theme_minimal() +
  # facet_grid(.~orientacao,space="free",scales = "free") +
   theme(legend.position = "bottom")
-
-# Outro dado de testagem
-testagem2 <- read_csv("testes.csv") %>%
-  dplyr::select(UF,testes=Testes)
-
-testagem2 %>% left_join(SRAG) %>%
-  mutate(tx_teste = testes*10^5/populacao) %>%
-  ggplot(aes(fill=Regiao,y=reorder(UF,desc(-tx_teste)),x=tx_teste)) +
-  geom_bar(stat = "identity") +
-  labs(x="Testes por 100mil habitantes",y="UF",fill="") +
-  theme_minimal() +
-  # facet_grid(.~orientacao,space="free",scales = "free") +
-  theme(legend.position = "bottom")
-
 
 
 
@@ -607,7 +607,7 @@ normas_tema_acum_long %>%
                       "Infrastructure",
                       "Intergovernmental relations",
                       "Spending"))) %>%
-  dplyr::filter(Semana>6) %>%
+  dplyr::filter(Semana>12) %>%
   left_join(SRAG) %>% #depois colocar empilhado
   
   ggplot(aes(x=Semana,fill=name,color=name,y=value)) +
