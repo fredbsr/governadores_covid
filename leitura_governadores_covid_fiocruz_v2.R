@@ -4,7 +4,7 @@
 library(ribge)
 library(coronabr)
 library(googlesheets4)
-library(tidyverse)
+#library(tidyverse)
 library(lubridate)
 library(magrittr)
 library(geobr)
